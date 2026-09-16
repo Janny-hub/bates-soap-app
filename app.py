@@ -1,8 +1,6 @@
 import streamlit as st
 from supabase import create_client, Client
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
-import io
+
 
 
 # ==========================================
@@ -339,16 +337,16 @@ Recommended clinical workflow:
 
 
 def create_pdf(report):
-    buffer = io.BytesIO()
-    document = SimpleDocTemplate(buffer)
-    styles = getSampleStyleSheet()
-    elements = []
-    for line in report.split("\n"):
-        elements.append(Paragraph(line.replace("&", "and"), styles["Normal"]))
-        elements.append(Spacer(1, 8))
-    document.build(elements)
-    buffer.seek(0)
-    return buffer
+    html = f"""
+    <html>
+    <body style='font-family: Arial;'>
+    <h1>MediFlow SOAP Clinical Report</h1>
+    <pre style='white-space:pre-wrap;'>{report}</pre>
+    </body>
+    </html>
+    """
+    return html.encode("utf-8")
+
 
 
 # ==========================================
@@ -2159,8 +2157,8 @@ if st.button(
     pdf_report = create_pdf(final_report)
 
     st.download_button(
-        label="Download SOAP Report PDF",
+        label="Download SOAP Report File",
         data=pdf_report,
-        file_name="MediFlow_SOAP_Report.pdf",
-        mime="application/pdf"
+        file_name="MediFlow_SOAP_Report.html",
+        mime="text/html"
     )
