@@ -1,114 +1,636 @@
 import streamlit as st
 from supabase import create_client, Client
 
-# 1. Fetch Supabase Credentials from Streamlit Secrets
+
+# ==============================
+# SUPABASE CONNECTION
+# ==============================
+
 SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
 SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+
 
 @st.cache_resource
 def init_supabase() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
 try:
     supabase = init_supabase()
-except Exception as e:
+except Exception:
     supabase = None
 
-# 2. SOAP Generator Logic
-def generate_soap(chief_complaint, onset_days, quality, symptoms, bp, hr, rr, temp, spo2, inspection, auscultation, location, dx_codes):
-    subj = f"Patient presents with a {onset_days}-day history of {chief_complaint.lower()}"
-    if quality:
-        subj += f" characterized as {quality.lower()}"
-    if symptoms:
-        subj += f", accompanied by {', '.join(symptoms).lower()}"
-    subj += "."
 
-    obj = f"Vital Signs: BP {bp} mmHg, HR {hr} bpm, RR {rr}/min, Temp {temp}°C, SpO2 {spo2}%."
-    chest_findings = []
-    if inspection:
-        chest_findings.append(f"Inspection: {inspection.lower()}")
-    if auscultation:
-        chest_findings.append(f"Auscultation reveals {', '.join(auscultation).lower()}")
-
-    if chest_findings:
-        obj += f" Chest & Lungs: {'. '.join(chest_findings)}"
-        if location:
-            obj += f" localized to the {location.lower()}"
-        obj += "."
-
-    assessment = f"Diagnoses (DOH/ICD-10): {'; '.join(dx_codes)}" if dx_codes else "Assessment Pending."
-
-    return subj, obj, assessment
-
-# 3. Streamlit Interface Configuration
-st.set_page_config(page_title="Bates SOAP & PhilHealth Konsulta", layout="wide")
-st.title("🩺 Bates SOAP & PhilHealth Konsulta Clinical App")
+# ==============================
+# FETCH DATABASE DATA
+# ==============================
 
 @st.cache_data(ttl=600)
-def fetch_doh_data():
+def fetch_data():
+
     if not supabase:
         return [], []
-    meds_res = supabase.table("pnf_medicines").select("*").order("generic_name").execute()
-    dx_res = supabase.table("doh_diagnoses").select("*").order("icd10_code").execute()
-    return meds_res.data or [], dx_res.data or []
 
-pnf_meds, doh_diagnoses = fetch_doh_data()
+    meds = (
+        supabase
+        .table("pnf_medicines")
+        .select("*")
+        .order("generic_name")
+        .execute()
+    )
 
-col1, col2 = st.columns([1, 1])
+    dx = (
+        supabase
+        .table("doh_diagnoses")
+        .select("*")
+        .order("icd10_code")
+        .execute()
+    )
+
+    return meds.data or [], dx.data or []
+
+
+pnf_meds, diagnoses = fetch_data()
+
+
+# ==============================
+# SOAP GENERATOR
+# ==============================
+
+def generate_soap(data):
+
+
+    SOAP = f"""
+
+# Clinical SOAP Note
+
+
+**Patient Name:** {data['name']}
+
+**Age / Sex:** {data['age']}-year-old {data['sex']}
+
+**Date / Time:** {data['date']}
+
+**Setting:** Primary Care Outpatient Clinic
+
+
+
+# S – Subjective
+
+
+## Chief Complaint (CC)
+
+"{data['chief']}"
+
+
+## History of Present Illness (HPI)
+
+
+The patient is a {data['age']}-year-old {data['sex']} who presents with a 
+{data['onset']} history of {data['chief'].lower()}.
+
+
+- **Onset:** {data['onset_detail']}
+
+- **Location/Radiation:** {data['location']}
+
+- **Duration:** {data['duration']}
+
+- **Character:** {data['character']}
+
+- **Aggravating Factors:** {data['aggravating']}
+
+- **Alleviating Factors:** {data['alleviating']}
+
+- **Severity / Associated Symptoms:**
+{data['associated']}
+
+
+
+## Past Medical History
+
+{data['pmh']}
+
+
+
+## Family History
+
+{data['family']}
+
+
+
+## Personal & Social History
+
+{data['social']}
+
+
+
+## Review of Systems
+
+
+**General:**
+
+{data['ros_general']}
+
+
+**HEENT:**
+
+{data['ros_heent']}
+
+
+**Respiratory:**
+
+{data['ros_resp']}
+
+
+**Cardiovascular:**
+
+{data['ros_cardio']}
+
+
+
+
+# O – Objective
+
+
+## Vital Signs
+
+
+- **BP:** {data['bp']}
+
+- **Heart Rate:** {data['hr']} bpm
+
+- **Respiratory Rate:** {data['rr']} breaths/min
+
+- **Temperature:** {data['temp']} °C
+
+- **SpO₂:** {data['spo2']} %
+
+- **BMI:** {data['bmi']}
+
+
+
+## General Appearance
+
+
+{data['general']}
+
+
+
+## HEENT
+
+
+{data['heent']}
+
+
+
+# Bates Physical Examination – Chest & Lungs
+
+
+## Inspection
+
+{data['inspection']}
+
+
+## Palpation
+
+{data['palpation']}
+
+
+## Percussion
+
+{data['percussion']}
+
+
+## Auscultation
+
+{data['auscultation']}
+
+
+
+# Cardiovascular
+
+
+{data['cardio']}
+
+
+
+
+# A – Assessment
+
+
+## Primary Diagnosis
+
+
+{data['primary_dx']}
+
+
+
+## Clinical Rationale
+
+
+{data['rationale']}
+
+
+
+## Differential Diagnoses
+
+
+{data['differentials']}
+
+
+
+## Comorbid Conditions
+
+
+{data['comorbid']}
+
+
+
+
+# P – Plan
+
+
+
+## 1. Diagnostics / Workup
+
+
+{data['diagnostics']}
+
+
+
+## 2. Therapeutics / Pharmacotherapy
+
+
+{data['medications']}
+
+
+
+## 3. Non-Pharmacological & Patient Education
+
+
+{data['education']}
+
+
+
+## 4. Safety Netting & Follow-up
+
+
+{data['followup']}
+
+
+
+**Attending Physician:** {data['physician']}
+
+**Intern:** {data['intern']}
+
+**Clerk:** {data['clerk']}
+
+
+"""
+
+    return SOAP
+
+
+
+# ==============================
+# APP UI
+# ==============================
+
+
+st.set_page_config(
+    page_title="Bates SOAP Generator",
+    layout="wide"
+)
+
+
+st.title("🩺 Bates SOAP & PhilHealth Konsulta Clinical App")
+
+
+
+col1,col2 = st.columns(2)
+
+
 
 with col1:
-    st.subheader("Subjective (History)")
-    chief_complaint = st.text_input("Chief Complaint", "Cough")
-    onset_days = st.number_input("Onset (Days)", min_value=1, value=3)
-    quality = st.selectbox("Quality", ["Productive with yellowish phlegm", "Dry, hacking", "Paroxysmal"])
-    symptoms = st.multiselect("Associated Symptoms", ["Fever", "Shortness of breath", "Chest pain", "Chills"])
 
-    st.subheader("Objective (Bates Physical Exam - Chest & Lungs)")
-    v_col1, v_col2, v_col3 = st.columns(3)
-    with v_col1:
-        bp = st.text_input("BP (mmHg)", "120/80")
-        hr = st.number_input("HR (bpm)", value=88)
-    with v_col2:
-        rr = st.number_input("RR (/min)", value=20)
-        temp = st.number_input("Temp (°C)", value=38.2)
-    with v_col3:
-        spo2 = st.number_input("SpO2 (%)", value=97)
 
-    inspection = st.selectbox("Inspection Findings", ["Normal symmetrical expansion", "Asymmetrical expansion", "Use of accessory muscles"])
-    auscultation = st.multiselect("Auscultation Findings", ["Clear breath sounds", "Crackles (Rales)", "Wheezing", "Rhonchi"])
-    location = st.text_input("Location Modifier", "Right lower lung field")
+    st.header("Patient Information")
+
+
+    name = st.text_input(
+        "Patient Name",
+        "Juan Dela Cruz"
+    )
+
+
+    age = st.number_input(
+        "Age",
+        value=42
+    )
+
+
+    sex = st.selectbox(
+        "Sex",
+        ["Male","Female"]
+    )
+
+
+    date = st.text_input(
+        "Date / Time",
+        "September 16, 2026 | 10:15 AM"
+    )
+
+
+
+    st.header("Subjective")
+
+
+    chief = st.text_input(
+        "Chief Complaint",
+        "Cough for 4 days and fever for 2 days"
+    )
+
+
+    onset = st.text_input(
+        "Duration",
+        "4-day"
+    )
+
+
+    onset_detail = st.text_area(
+        "Onset",
+        "Started as dry cough progressing to productive cough"
+    )
+
+
+    location = st.text_input(
+        "Location/Radiation",
+        "Retrosternal discomfort during coughing"
+    )
+
+
+    duration = st.text_input(
+        "Duration Pattern",
+        "Constant, worse at night"
+    )
+
+
+    character = st.text_area(
+        "Character",
+        "Productive cough with yellowish sputum"
+    )
+
+
+    aggravating = st.text_input(
+        "Aggravating Factors",
+        "Cold air, lying flat"
+    )
+
+
+    alleviating = st.text_input(
+        "Alleviating Factors",
+        "Warm water"
+    )
+
+
+    associated = st.text_area(
+        "Associated Symptoms",
+        "Fever, chills, nasal congestion, fatigue"
+    )
+
+
+
+    pmh = st.text_area(
+        "Past Medical History",
+        "Essential Hypertension controlled with Amlodipine"
+    )
+
+
+    family = st.text_area(
+        "Family History",
+        "Father with hypertension and diabetes"
+    )
+
+
+    social = st.text_area(
+        "Personal/Social History",
+        "Non-smoker, occasional alcohol intake"
+    )
+
+
 
 with col2:
-    st.subheader("Assessment (DOH PhilHealth Konsulta ICD-10)")
-    dx_options = [f"{d['icd10_code']} - {d['description']}" for d in doh_diagnoses] if doh_diagnoses else ["I10 - Essential Hypertension", "J06.9 - Acute Upper Respiratory Infection"]
-    selected_diagnoses = st.multiselect("Select Primary Care Diagnoses", dx_options)
 
-    st.subheader("Plan (DOH PNF Prescription Helper)")
-    med_options = [f"{m['generic_name']} ({m['formulation']}) [{m['category']}]" for m in pnf_meds] if pnf_meds else ["Paracetamol (500 mg Tablet)", "Amoxicillin (500 mg Capsule)"]
-    selected_rx = st.multiselect("Prescribe PNF Essential Medicines", med_options)
 
-    st.markdown("---")
-    if st.button("Generate PhilHealth Konsulta Clinical Summary", type="primary"):
-        subj_narrative, obj_narrative, assessment_narrative = generate_soap(
-            chief_complaint, onset_days, quality, symptoms,
-            bp, hr, rr, temp, spo2, inspection, auscultation, location, selected_diagnoses
-        )
+    st.header("Objective")
 
-        st.markdown("### Subjective")
-        st.info(subj_narrative)
 
-        st.markdown("### Objective")
-        st.success(obj_narrative)
+    bp = st.text_input("BP","124/80 mmHg")
 
-        st.markdown("### Assessment")
-        st.warning(assessment_narrative)
+    hr = st.number_input("HR",84)
 
-        st.markdown("### Plan (Prescriptions)")
-        if selected_rx:
-            for rx in selected_rx:
-                st.write(f"- 💊 {rx}")
-        else:
-            st.write("No medications prescribed.")
+    rr = st.number_input("RR",18)
 
-        full_export = f"SUBJECTIVE:\n{subj_narrative}\n\nOBJECTIVE:\n{obj_narrative}\n\nASSESSMENT:\n{assessment_narrative}\n\nPLAN:\n" + "\n".join([f"- {r}" for r in selected_rx])
-        st.text_area("PhilHealth Konsulta EMR Export Text", full_export, height=220)
+    temp = st.number_input("Temperature",37.8)
+
+    spo2 = st.number_input("SpO2",98)
+
+
+    bmi = st.text_input(
+        "BMI",
+        "24.2 kg/m²"
+    )
+
+
+
+    general = st.text_area(
+        "General Appearance",
+        "Alert, oriented, no respiratory distress"
+    )
+
+
+    heent = st.text_area(
+        "HEENT Examination",
+        "Mild pharyngeal erythema with clear nasal discharge"
+    )
+
+
+
+    inspection = st.text_area(
+        "Inspection",
+        "Symmetrical chest expansion, no retractions"
+    )
+
+
+    palpation = st.text_area(
+        "Palpation",
+        "Normal tactile fremitus, trachea midline"
+    )
+
+
+    percussion = st.text_area(
+        "Percussion",
+        "Resonant lung fields"
+    )
+
+
+    auscultation = st.text_area(
+        "Auscultation",
+        "Coarse crackles and rhonchi on right lower lung field"
+    )
+
+
+    cardio = st.text_area(
+        "Cardiovascular",
+        "Normal S1 and S2, no murmurs"
+    )
+
+
+
+st.header("Assessment")
+
+
+primary_dx = st.text_input(
+    "Primary Diagnosis",
+    "Acute Bronchitis (J20.9)"
+)
+
+
+rationale = st.text_area(
+    "Clinical Rationale",
+    "Acute productive cough following viral symptoms with normal oxygen saturation"
+)
+
+
+differentials = st.text_area(
+    "Differential Diagnoses",
+    "CAP, AURI, Pulmonary Tuberculosis"
+)
+
+
+comorbid = st.text_input(
+    "Comorbid Conditions",
+    "Essential Hypertension (I10)"
+)
+
+
+
+st.header("Plan")
+
+
+diagnostics = st.text_area(
+    "Diagnostics",
+    "Chest X-ray if symptoms worsen"
+)
+
+
+medications = st.text_area(
+    "Medications",
+    "Paracetamol 500mg PRN; Continue Amlodipine"
+)
+
+
+education = st.text_area(
+    "Patient Education",
+    "Hydration, rest, avoid smoke exposure"
+)
+
+
+followup = st.text_area(
+    "Follow-up",
+    "Return after 3-5 days or seek ER for warning signs"
+)
+
+
+physician = st.text_input(
+    "Attending Physician"
+)
+
+intern = st.text_input(
+    "Intern"
+)
+
+clerk = st.text_input(
+    "Clerk"
+)
+
+
+
+if st.button(
+    "Generate SOAP Report",
+    type="primary"
+):
+
+
+    data = {
+
+        "name":name,
+        "age":age,
+        "sex":sex,
+        "date":date,
+
+        "chief":chief,
+        "onset":onset,
+        "onset_detail":onset_detail,
+        "location":location,
+        "duration":duration,
+        "character":character,
+        "aggravating":aggravating,
+        "alleviating":alleviating,
+        "associated":associated,
+
+        "pmh":pmh,
+        "family":family,
+        "social":social,
+
+        "ros_general":"Positive for fever and chills",
+        "ros_heent":"Positive for congestion",
+        "ros_resp":"Positive for cough and sputum",
+        "ros_cardio":"Negative for chest pain",
+
+        "bp":bp,
+        "hr":hr,
+        "rr":rr,
+        "temp":temp,
+        "spo2":spo2,
+        "bmi":bmi,
+
+        "general":general,
+        "heent":heent,
+
+        "inspection":inspection,
+        "palpation":palpation,
+        "percussion":percussion,
+        "auscultation":auscultation,
+
+        "cardio":cardio,
+
+        "primary_dx":primary_dx,
+        "rationale":rationale,
+        "differentials":differentials,
+        "comorbid":comorbid,
+
+        "diagnostics":diagnostics,
+        "medications":medications,
+        "education":education,
+        "followup":followup,
+
+        "physician":physician,
+        "intern":intern,
+        "clerk":clerk
+
+    }
+
+
+    result = generate_soap(data)
+
+
+    st.markdown(result)
+
+
+    st.download_button(
+        "Download SOAP Report",
+        result,
+        file_name="SOAP_Report.txt"
+    )
