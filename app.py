@@ -9,9 +9,65 @@ from supabase import create_client, Client
 
 st.markdown("""
 <style>
-.stApp {background-color:#f4fbf7;}
-h1,h2,h3 {color:#087f5b;}
-.stButton>button {background-color:#0ca678;color:white;border-radius:10px;}
+/* MediFlow Modern Green Theme - Readable */
+
+.stApp {
+    background-color: #f8faf9;
+    color: #1f2937;
+}
+
+h1, h2, h3, h4 {
+    color: #065f46 !important;
+    font-weight: 700;
+}
+
+p, label, span, div {
+    color: #1f2937;
+}
+
+.stTextInput label,
+.stTextArea label,
+.stSelectbox label,
+.stMultiSelect label,
+.stNumberInput label {
+    color: #064e3b !important;
+    font-weight: 600;
+}
+
+input, textarea {
+    background-color: white !important;
+    color: #111827 !important;
+    border: 1px solid #a7f3d0 !important;
+    border-radius: 8px !important;
+}
+
+.stSelectbox div[data-baseweb="select"] {
+    background-color: white !important;
+    color: #111827 !important;
+}
+
+.stButton > button {
+    background-color: #059669 !important;
+    color: white !important;
+    border-radius: 10px;
+    border: none;
+    font-weight: 600;
+}
+
+.stButton > button:hover {
+    background-color: #047857 !important;
+}
+
+.stInfo {
+    background-color: #ecfdf5 !important;
+    color: #064e3b !important;
+    border-left: 5px solid #10b981;
+}
+
+[data-testid="stHeader"] {
+    background-color: transparent;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -355,7 +411,7 @@ def create_pdf(report):
 
 
 st.title(
-    "🩺 MediFlow AI Clinical EMR"
+    "🩺 MediFlow AI Clinical EMR | SOAP Documentation System"
 )
 
 
