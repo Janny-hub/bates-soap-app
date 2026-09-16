@@ -2,28 +2,36 @@ import streamlit as st
 from supabase import create_client, Client
 
 
-# =====================================
+# ==========================================
 # PAGE CONFIGURATION
-# =====================================
+# ==========================================
 
 st.set_page_config(
-    page_title="Bates SOAP Clinical Generator",
+    page_title="Bates SOAP Clinical EMR",
     layout="wide"
 )
 
 
-# =====================================
+# ==========================================
 # SUPABASE CONNECTION
-# =====================================
+# ==========================================
 
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+SUPABASE_URL = st.secrets.get(
+    "SUPABASE_URL",
+    ""
+)
+
+SUPABASE_KEY = st.secrets.get(
+    "SUPABASE_KEY",
+    ""
+)
 
 
 @st.cache_resource
 def init_supabase():
 
     if SUPABASE_URL and SUPABASE_KEY:
+
         return create_client(
             SUPABASE_URL,
             SUPABASE_KEY
@@ -32,16 +40,18 @@ def init_supabase():
     return None
 
 
+
 supabase = init_supabase()
 
 
 
-# =====================================
-# FETCH DOH / PNF DATABASE
-# =====================================
+# ==========================================
+# LOAD DATABASE
+# ==========================================
+
 
 @st.cache_data(ttl=600)
-def fetch_database():
+def load_database():
 
     if not supabase:
         return [], []
@@ -51,7 +61,6 @@ def fetch_database():
         supabase
         .table("pnf_medicines")
         .select("*")
-        .order("generic_name")
         .execute()
     )
 
@@ -60,25 +69,27 @@ def fetch_database():
         supabase
         .table("doh_diagnoses")
         .select("*")
-        .order("icd10_code")
         .execute()
     )
 
 
     return (
+
         medicines.data or [],
+
         diagnoses.data or []
+
     )
 
 
 
-pnf_medicines, doh_diagnoses = fetch_database()
+pnf_medicines, doh_diagnoses = load_database()
 
 
 
-# =====================================
-# NARRATIVE SOAP GENERATOR
-# =====================================
+# ==========================================
+# SOAP NARRATIVE GENERATOR
+# ==========================================
 
 
 def generate_soap(data):
@@ -103,23 +114,23 @@ def generate_soap(data):
 
 
 
-## Chief Complaint (CC)
+## Chief Complaint
 
 
 The patient presented with the chief complaint of "{data['chief']}."
 
 
 
-## History of Present Illness (HPI)
+## History of Present Illness
 
 
-The patient is a {data['age']}-year-old {data['sex']} who presents with a {data['duration_of_illness']} history of {data['chief'].lower()}.
+The patient is a {data['age']}-year-old {data['sex']} who presents with a {data['duration']} history of {data['chief'].lower()}.
 
 
-The symptoms started {data['onset_detail']}. The patient describes the condition as {data['character']}. The symptoms are aggravated by {data['aggravating']} and temporarily relieved by {data['alleviating']}.
+The condition started {data['onset']}. The patient describes the symptoms as {data['character']}. Symptoms are aggravated by {data['aggravating']} and relieved by {data['alleviating']}.
 
 
-The patient reports associated symptoms including {data['associated']}. The patient denies other significant symptoms not previously mentioned.
+Associated symptoms include {data['associated']}.
 
 
 
@@ -147,7 +158,7 @@ The patient reports {data['social']}.
 ## Review of Systems
 
 
-Under the general system, the patient reports {data['ros_general']}.
+General review reveals {data['ros_general']}.
 
 
 HEENT review reveals {data['ros_heent']}.
@@ -156,7 +167,25 @@ HEENT review reveals {data['ros_heent']}.
 Respiratory review reveals {data['ros_respiratory']}.
 
 
+Thorax review reveals {data['ros_thorax']}.
+
+
 Cardiovascular review reveals {data['ros_cardio']}.
+
+
+Gastrointestinal review reveals {data['ros_gastro']}.
+
+
+Genitourinary review reveals {data['ros_gu']}.
+
+
+Musculoskeletal review reveals {data['ros_musculoskeletal']}.
+
+
+Neurologic review reveals {data['ros_neuro']}.
+
+
+Skin review reveals {data['ros_skin']}.
 
 
 
@@ -169,44 +198,14 @@ Cardiovascular review reveals {data['ros_cardio']}.
 ## Vital Signs
 
 
-The patient's vital signs were recorded as follows: blood pressure of {data['bp']}, heart rate of {data['hr']} beats per minute, respiratory rate of {data['rr']} breaths per minute, body temperature of {data['temperature']} °C, oxygen saturation of {data['spo2']}% on room air, with a BMI of {data['bmi']}.
+Blood pressure was {data['bp']}, heart rate was {data['hr']} bpm, respiratory rate was {data['rr']} breaths/min, temperature was {data['temperature']} °C, oxygen saturation was {data['spo2']}% on room air, and BMI was {data['bmi']}.
 
 
 
-## General Appearance
+## Physical Examination
 
 
-On physical examination, the patient was noted to be {data['general']}.
-
-
-
-## HEENT Examination
-
-
-HEENT examination revealed {data['heent']}.
-
-
-
-## Bates Physical Examination – Chest and Lungs
-
-
-Inspection of the chest revealed {data['inspection']}.
-
-
-On palpation, the chest examination demonstrated {data['palpation']}.
-
-
-Percussion of the lung fields revealed {data['percussion']}.
-
-
-Auscultation revealed {data['auscultation']}.
-
-
-
-## Cardiovascular Examination
-
-
-Cardiovascular examination showed {data['cardiovascular']}.
+{data['physical_exam']}
 
 
 
@@ -216,19 +215,19 @@ Cardiovascular examination showed {data['cardiovascular']}.
 
 
 
-Based on the patient's clinical history, physical examination findings, and available diagnostic information, the primary diagnosis is {data['primary_diagnosis']}.
+The primary diagnosis is {data['primary_dx']}.
 
 
 
-The diagnosis is supported by the clinical presentation characterized by {data['clinical_rationale']}.
+The diagnosis is supported by {data['rationale']}.
 
 
 
-Differential diagnoses considered include {data['differential']}.
+Differential diagnoses include {data['differential']}.
 
 
 
-The patient also has a comorbid condition of {data['comorbidity']}.
+The patient has the following comorbid condition/s: {data['comorbidity']}.
 
 
 
@@ -238,48 +237,51 @@ The patient also has a comorbid condition of {data['comorbidity']}.
 
 
 
-## Diagnostics / Workup
+## Diagnostics
 
 
-The recommended diagnostic approach includes {data['diagnostics']}.
-
-
-
-Further investigation will be considered if symptoms persist, worsen, or if additional clinical findings develop.
+{data['diagnostics']}
 
 
 
-## Therapeutics / Pharmacotherapy
+## Pharmacotherapy
 
 
-The patient was advised regarding the following treatment plan: {data['medications']}.
-
-
-
-## Non-Pharmacological Management and Patient Education
-
-
-The patient was advised regarding {data['education']}.
+{data['medications']}
 
 
 
-## Follow-up and Safety Netting
+## Patient Education
 
 
-The patient was instructed to return for follow-up evaluation after {data['followup']}.
-
-
-The patient was advised to seek immediate medical attention for worsening symptoms such as difficulty breathing, chest pain, persistent high-grade fever, altered mental status, or other emergency warning signs.
+{data['education']}
 
 
 
-**Attending Physician:** {data['physician']}
+## Follow-up
 
 
-**Intern:** {data['intern']}
+The patient was advised to return after {data['followup']} or seek immediate medical attention if symptoms worsen.
 
 
-**Clerk:** {data['clerk']}
+
+
+
+Attending Physician:
+
+{data['physician']}
+
+
+
+Intern:
+
+{data['intern']}
+
+
+
+Clerk:
+
+{data['clerk']}
 
 
 """
@@ -289,16 +291,20 @@ The patient was advised to seek immediate medical attention for worsening sympto
 
 
 
-# =====================================
-# APPLICATION INTERFACE
-# =====================================
+
+# ==========================================
+# APP TITLE
+# ==========================================
 
 
-st.title("🩺 Bates SOAP & PhilHealth Konsulta Clinical Generator")
+st.title(
+    "🩺 Bates SOAP & PhilHealth Konsulta Clinical Generator"
+)
+
 
 
 st.write(
-    "Generate a narrative clinical SOAP report based on Bates' Guide Physical Examination format."
+    "Narrative SOAP documentation system for Primary Care."
 )
 
 
@@ -307,15 +313,18 @@ left, right = st.columns(2)
 
 
 
-# =====================================
-# SUBJECTIVE INPUTS
-# =====================================
+
+# ==========================================
+# PATIENT + SUBJECTIVE
+# ==========================================
 
 
 with left:
 
 
-    st.header("Patient Information")
+    st.header(
+        "Patient Information"
+    )
 
 
     name = st.text_input(
@@ -326,7 +335,7 @@ with left:
 
     age = st.number_input(
         "Age",
-        42
+        value=42
     )
 
 
@@ -346,7 +355,10 @@ with left:
 
 
 
-    st.header("Subjective Data")
+    st.header(
+        "History of Present Illness"
+    )
+
 
 
     chief = st.text_input(
@@ -355,216 +367,1529 @@ with left:
     )
 
 
-    duration_of_illness = st.text_input(
-        "Duration of Illness",
+    duration = st.text_input(
+        "Duration",
         "4-day"
     )
 
 
-    onset_detail = st.text_area(
-        "HPI Onset",
-        "started as dry tickling cough progressing to productive cough"
+    onset = st.text_area(
+        "Onset",
+        "Started as dry cough progressing to productive cough"
     )
 
 
     character = st.text_area(
         "Character",
-        "productive cough with yellowish thick sputum"
+        "Productive cough with yellowish sputum"
     )
 
 
     aggravating = st.text_input(
         "Aggravating Factors",
-        "cold air, deep inspiration, lying flat"
+        "Cold air and lying flat"
     )
 
 
     alleviating = st.text_input(
         "Alleviating Factors",
-        "warm water"
-    )
-
-
-    associated = st.text_area(
-        "Associated Symptoms",
-        "fever, chills, nasal congestion, mild fatigue"
-    )
-
-
-    pmh = st.text_area(
-        "Past Medical History",
-        "Essential Hypertension controlled with Amlodipine"
-    )
-
-
-    family = st.text_area(
-        "Family History",
-        "Father with hypertension and diabetes"
-    )
-
-
-    social = st.text_area(
-        "Personal/Social History",
-        "Non-smoker, occasional alcohol intake, office worker"
-    )
-
-
-    ros_general = st.text_input(
-        "ROS General",
-        "mild fever and chills"
-    )
-
-
-    ros_heent = st.text_input(
-        "ROS HEENT",
-        "nasal congestion and sore throat"
-    )
-
-
-    ros_respiratory = st.text_input(
-        "ROS Respiratory",
-        "cough and sputum production without shortness of breath"
-    )
-
-
-    ros_cardio = st.text_input(
-        "ROS Cardiovascular",
-        "no chest pain, palpitations, or edema"
-    )
-    # =====================================
-# OBJECTIVE INPUTS
-# =====================================
-
-
-with right:
-
-
-    st.header("Objective Data")
-
-
-    bp = st.text_input(
-        "Blood Pressure",
-        "124/80 mmHg"
-    )
-
-
-    hr = st.number_input(
-        "Heart Rate",
-        84
-    )
-
-
-    rr = st.number_input(
-        "Respiratory Rate",
-        18
-    )
-
-
-    temperature = st.number_input(
-        "Temperature",
-        37.8
-    )
-
-
-    spo2 = st.number_input(
-        "SpO2",
-        98
-    )
-
-
-    bmi = st.text_input(
-        "BMI",
-        "24.2 kg/m²"
-    )
-
-
-
-    general = st.text_area(
-        "General Appearance",
-        "alert, oriented x3, well-nourished, hydrated, and in no apparent distress"
-    )
-
-
-    heent = st.text_area(
-        "HEENT Examination",
-        "mild nasal mucosal erythema with clear discharge and mild posterior pharyngeal erythema"
+        "Warm water"
     )
 
 
 
     st.subheader(
-        "Bates Chest and Lung Examination"
+        "Associated Symptoms"
     )
 
 
-    inspection = st.text_area(
-        "Inspection",
-        "symmetrical thoracic expansion with no retractions, deformities, or accessory muscle use"
+    symptom_list = [
+
+        "Fever",
+        "Chills",
+        "Fatigue",
+        "Weakness",
+        "Weight loss",
+        "Night sweats",
+
+        "Cough",
+        "Sputum production",
+        "Shortness of breath",
+        "Wheezing",
+        "Chest pain",
+
+        "Nasal congestion",
+        "Runny nose",
+        "Sore throat",
+
+        "Headache",
+        "Dizziness",
+
+        "Nausea",
+        "Vomiting",
+        "Diarrhea",
+
+        "Abdominal pain",
+
+        "Dysuria",
+        "Urinary frequency",
+
+        "Joint pain",
+        "Muscle pain"
+
+    ]
+
+
+    associated = st.multiselect(
+        "Select Symptoms",
+        symptom_list
     )
 
 
-    palpation = st.text_area(
-        "Palpation",
-        "normal tactile fremitus bilaterally with trachea in midline position"
+    associated = ", ".join(associated) if associated else "none"
+
+
+
+    st.subheader(
+        "Past Medical History"
     )
 
 
-    percussion = st.text_area(
-        "Percussion",
-        "resonant percussion note throughout all lung fields"
+    disease_list = [
+
+        "Hypertension",
+        "Diabetes Mellitus Type 2",
+        "Asthma",
+        "COPD",
+        "Tuberculosis",
+        "Pneumonia",
+
+        "Coronary Artery Disease",
+        "Heart Failure",
+        "Stroke",
+
+        "Chronic Kidney Disease",
+
+        "Hyperlipidemia",
+
+        "Thyroid Disease",
+
+        "Cancer",
+
+        "GERD",
+
+        "Depression",
+        "Anxiety Disorder"
+
+    ]
+
+
+    pmh = st.multiselect(
+        "Select Diseases",
+        disease_list
     )
 
 
-    auscultation = st.text_area(
-        "Auscultation",
-        "coarse crackles and low-pitched rhonchi noted over the right lower lung field, partially clearing after coughing"
+    pmh = ", ".join(pmh) if pmh else "No known medical illness"
+
+
+
+    st.subheader(
+        "Family History"
     )
 
 
-    cardiovascular = st.text_area(
-        "Cardiovascular Examination",
-        "normal S1 and S2 heart sounds with regular rhythm and no murmurs, gallops, or friction rub"
+    family = st.multiselect(
+        "Family Diseases",
+        disease_list
     )
 
 
+    family = ", ".join(family) if family else "No significant family history"
 
-# =====================================
+
+
+    social = st.multiselect(
+        "Social History",
+
+        [
+
+            "Non-smoker",
+            "Smoker",
+            "Former smoker",
+
+            "Alcohol drinker",
+            "No alcohol intake",
+
+            "Vape user",
+
+            "Occupational exposure",
+
+            "Regular exercise"
+
+        ]
+
+    )
+
+
+    social = ", ".join(social) if social else "No significant social history"
+# ==========================================
+# REVIEW OF SYSTEMS MODULE
+# ==========================================
+
+
+st.header("Review of Systems (ROS)")
+
+
+# GENERAL
+
+ros_general = st.multiselect(
+
+    "ROS - General",
+
+    [
+
+        "Fever",
+        "Chills",
+        "Fatigue",
+        "Weakness",
+        "Weight loss",
+        "Weight gain",
+        "Night sweats",
+        "Loss of appetite",
+        "Sleep disturbance"
+
+    ]
+
+)
+
+
+
+# HEENT
+
+ros_heent = st.multiselect(
+
+    "ROS - HEENT",
+
+    [
+
+        "Headache",
+        "Dizziness",
+
+        "Blurred vision",
+        "Eye pain",
+
+        "Ear pain",
+        "Hearing loss",
+
+        "Nasal congestion",
+        "Runny nose",
+
+        "Sinus pressure",
+
+        "Sore throat",
+
+        "Difficulty swallowing"
+
+    ]
+
+)
+
+
+
+# RESPIRATORY
+
+ros_respiratory = st.multiselect(
+
+    "ROS - Respiratory",
+
+    [
+
+        "Cough",
+        "Sputum production",
+
+        "Shortness of breath",
+
+        "Wheezing",
+
+        "Hemoptysis",
+
+        "Difficulty breathing",
+
+        "Nocturnal cough"
+
+    ]
+
+)
+
+
+
+# THORAX
+
+ros_thorax = st.multiselect(
+
+    "ROS - Thorax",
+
+    [
+
+        "Chest pain",
+
+        "Chest tightness",
+
+        "Chest tenderness",
+
+        "Breast pain",
+
+        "Breast mass"
+
+    ]
+
+)
+
+
+
+# CARDIOVASCULAR
+
+ros_cardio = st.multiselect(
+
+    "ROS - Cardiovascular",
+
+    [
+
+        "Palpitations",
+
+        "Chest pain",
+
+        "Orthopnea",
+
+        "Paroxysmal nocturnal dyspnea",
+
+        "Leg swelling",
+
+        "Exercise intolerance"
+
+    ]
+
+)
+
+
+
+# GASTROINTESTINAL
+
+ros_gastro = st.multiselect(
+
+    "ROS - Gastrointestinal",
+
+    [
+
+        "Abdominal pain",
+
+        "Nausea",
+
+        "Vomiting",
+
+        "Diarrhea",
+
+        "Constipation",
+
+        "Blood in stool",
+
+        "Heartburn",
+
+        "Loss of appetite"
+
+    ]
+
+)
+
+
+
+# GENITOURINARY
+
+ros_gu = st.multiselect(
+
+    "ROS - Genitourinary",
+
+    [
+
+        "Dysuria",
+
+        "Urinary frequency",
+
+        "Urinary urgency",
+
+        "Hematuria",
+
+        "Flank pain",
+
+        "Urinary incontinence",
+
+        "Abnormal discharge"
+
+    ]
+
+)
+
+
+
+# MUSCULOSKELETAL
+
+ros_musculoskeletal = st.multiselect(
+
+    "ROS - Musculoskeletal",
+
+    [
+
+        "Joint pain",
+
+        "Joint swelling",
+
+        "Muscle pain",
+
+        "Back pain",
+
+        "Muscle weakness",
+
+        "Limited movement"
+
+    ]
+
+)
+
+
+
+# NEUROLOGIC
+
+ros_neuro = st.multiselect(
+
+    "ROS - Neurologic",
+
+    [
+
+        "Headache",
+
+        "Dizziness",
+
+        "Numbness",
+
+        "Tingling sensation",
+
+        "Loss of consciousness",
+
+        "Seizure",
+
+        "Memory problems"
+
+    ]
+
+)
+
+
+
+# SKIN
+
+ros_skin = st.multiselect(
+
+    "ROS - Skin",
+
+    [
+
+        "Rash",
+
+        "Itching",
+
+        "Skin discoloration",
+
+        "Wound",
+
+        "Skin lesions"
+
+    ]
+
+)
+
+
+
+# Convert ROS to narrative
+
+
+def ros_text(value):
+
+    if value:
+
+        return ", ".join(value)
+
+    return "no significant symptoms reported"
+
+
+
+ros_general = ros_text(ros_general)
+
+ros_heent = ros_text(ros_heent)
+
+ros_respiratory = ros_text(ros_respiratory)
+
+ros_thorax = ros_text(ros_thorax)
+
+ros_cardio = ros_text(ros_cardio)
+
+ros_gastro = ros_text(ros_gastro)
+
+ros_gu = ros_text(ros_gu)
+
+ros_musculoskeletal = ros_text(ros_musculoskeletal)
+
+ros_neuro = ros_text(ros_neuro)
+
+ros_skin = ros_text(ros_skin)
+
+
+
+
+
+# ==========================================
+# PHYSICAL EXAMINATION MODULE
+# ==========================================
+
+
+st.header("Physical Examination")
+
+
+
+# GENERAL EXAMINATION
+
+
+general_exam_status = st.selectbox(
+
+    "General Appearance",
+
+    [
+
+        "Unremarkable",
+
+        "Alert and oriented",
+
+        "Ill-looking",
+
+        "In mild distress",
+
+        "In moderate distress",
+
+        "In severe distress"
+
+    ]
+
+)
+
+
+
+general_positive = st.multiselect(
+
+    "General Positive Findings",
+
+    [
+
+        "Pallor",
+
+        "Cyanosis",
+
+        "Dehydration",
+
+        "Cachexia",
+
+        "Feverish appearance",
+
+        "Altered mental status"
+
+    ]
+
+)
+
+
+
+general_negative = st.multiselect(
+
+    "General Pertinent Negatives",
+
+    [
+
+        "No acute distress",
+
+        "No pallor",
+
+        "No cyanosis",
+
+        "No dehydration",
+
+        "No altered consciousness"
+
+    ]
+
+)
+
+
+
+
+
+# HEENT EXAMINATION
+
+
+heent_exam_status = st.selectbox(
+
+    "HEENT Examination",
+
+    [
+
+        "Unremarkable",
+
+        "Abnormal findings present"
+
+    ]
+
+)
+
+
+
+heent_positive = st.multiselect(
+
+    "HEENT Positive Findings",
+
+    [
+
+        "Pale conjunctiva",
+
+        "Icteric sclera",
+
+        "Nasal congestion",
+
+        "Nasal discharge",
+
+        "Pharyngeal erythema",
+
+        "Tonsillar enlargement",
+
+        "Tonsillar exudates",
+
+        "Cervical lymphadenopathy"
+
+    ]
+
+)
+
+
+
+heent_negative = st.multiselect(
+
+    "HEENT Pertinent Negatives",
+
+    [
+
+        "No sinus tenderness",
+
+        "No tonsillar exudates",
+
+        "No oral lesions",
+
+        "No cervical lymphadenopathy"
+
+    ]
+
+)
+
+
+
+
+
+# RESPIRATORY EXAMINATION
+
+
+resp_exam_status = st.selectbox(
+
+    "Chest and Lung Examination",
+
+    [
+
+        "Unremarkable",
+
+        "Abnormal findings present"
+
+    ]
+
+)
+
+
+
+resp_positive = st.multiselect(
+
+    "Respiratory Positive Findings",
+
+    [
+
+        "Crackles (rales)",
+
+        "Rhonchi",
+
+        "Wheezing",
+
+        "Decreased breath sounds",
+
+        "Bronchial breath sounds",
+
+        "Accessory muscle use",
+
+        "Intercostal retractions"
+
+    ]
+
+)
+
+
+
+resp_negative = st.multiselect(
+
+    "Respiratory Pertinent Negatives",
+
+    [
+
+        "No respiratory distress",
+
+        "No cyanosis",
+
+        "No hemoptysis",
+
+        "No pleuritic chest pain",
+
+        "No accessory muscle use",
+
+        "No stridor"
+
+    ]
+
+)
+
+
+
+# CARDIOVASCULAR
+
+
+cardio_exam_status = st.selectbox(
+
+    "Cardiovascular Examination",
+
+    [
+
+        "Unremarkable",
+
+        "Abnormal findings present"
+
+    ]
+
+)
+
+
+
+cardio_positive = st.multiselect(
+
+    "Cardiovascular Positive Findings",
+
+    [
+
+        "Heart murmur",
+
+        "Irregular rhythm",
+
+        "Peripheral edema",
+
+        "Jugular venous distension",
+
+        "Weak pulses"
+
+    ]
+
+)
+
+
+
+cardio_negative = st.multiselect(
+
+    "Cardiovascular Pertinent Negatives",
+
+    [
+
+        "No chest pain",
+
+        "No edema",
+
+        "No JVD",
+
+        "Regular rhythm",
+
+        "Normal peripheral pulses"
+
+    ]
+
+)
+# ==========================================
+# ABDOMINAL EXAMINATION
+# ==========================================
+
+
+st.subheader("Abdominal Examination")
+
+
+abdomen_status = st.selectbox(
+
+    "Abdomen",
+
+    [
+        "Unremarkable",
+        "Abnormal findings present"
+    ]
+
+)
+
+
+
+abdomen_positive = st.multiselect(
+
+    "Abdominal Positive Findings",
+
+    [
+
+        "Abdominal tenderness",
+
+        "Right upper quadrant tenderness",
+
+        "Left lower quadrant tenderness",
+
+        "Guarding",
+
+        "Rebound tenderness",
+
+        "Abdominal distension",
+
+        "Palpable mass",
+
+        "Ascites"
+
+    ]
+
+)
+
+
+
+abdomen_negative = st.multiselect(
+
+    "Abdominal Pertinent Negatives",
+
+    [
+
+        "No abdominal tenderness",
+
+        "No guarding",
+
+        "No rebound tenderness",
+
+        "No palpable mass",
+
+        "Normal bowel sounds"
+
+    ]
+
+)
+
+
+
+
+
+# ==========================================
+# GENITOURINARY EXAMINATION
+# ==========================================
+
+
+st.subheader("Genitourinary Examination")
+
+
+gu_exam_status = st.selectbox(
+
+    "Genitourinary",
+
+    [
+
+        "Unremarkable",
+
+        "Abnormal findings present"
+
+    ]
+
+)
+
+
+
+gu_exam_positive = st.multiselect(
+
+    "GU Positive Findings",
+
+    [
+
+        "Suprapubic tenderness",
+
+        "Costovertebral angle tenderness",
+
+        "Abnormal discharge",
+
+        "Genital lesion",
+
+        "Scrotal swelling"
+
+    ]
+
+)
+
+
+
+gu_exam_negative = st.multiselect(
+
+    "GU Pertinent Negatives",
+
+    [
+
+        "No CVA tenderness",
+
+        "No suprapubic tenderness",
+
+        "No abnormal discharge",
+
+        "No lesions"
+
+    ]
+
+)
+
+
+
+
+
+# ==========================================
+# MUSCULOSKELETAL EXAMINATION
+# ==========================================
+
+
+st.subheader("Musculoskeletal Examination")
+
+
+msk_status = st.selectbox(
+
+    "Musculoskeletal",
+
+    [
+
+        "Unremarkable",
+
+        "Abnormal findings present"
+
+    ]
+
+)
+
+
+
+msk_positive = st.multiselect(
+
+    "Musculoskeletal Positive Findings",
+
+    [
+
+        "Joint swelling",
+
+        "Joint tenderness",
+
+        "Reduced range of motion",
+
+        "Muscle weakness",
+
+        "Deformity",
+
+        "Gait abnormality"
+
+    ]
+
+)
+
+
+
+msk_negative = st.multiselect(
+
+    "Musculoskeletal Pertinent Negatives",
+
+    [
+
+        "No joint swelling",
+
+        "No deformity",
+
+        "Full range of motion",
+
+        "No muscle tenderness"
+
+    ]
+
+)
+
+
+
+
+
+# ==========================================
+# NEUROLOGIC EXAMINATION
+# ==========================================
+
+
+st.subheader("Neurologic Examination")
+
+
+neuro_status = st.selectbox(
+
+    "Neurologic",
+
+    [
+
+        "Unremarkable",
+
+        "Abnormal findings present"
+
+    ]
+
+)
+
+
+
+neuro_positive = st.multiselect(
+
+    "Neurologic Positive Findings",
+
+    [
+
+        "Altered mental status",
+
+        "Weakness",
+
+        "Sensory deficit",
+
+        "Abnormal gait",
+
+        "Tremors",
+
+        "Seizure activity"
+
+    ]
+
+)
+
+
+
+neuro_negative = st.multiselect(
+
+    "Neurologic Pertinent Negatives",
+
+    [
+
+        "Alert and oriented",
+
+        "No focal neurologic deficit",
+
+        "Normal gait",
+
+        "No seizure activity"
+
+    ]
+
+)
+
+
+
+
+
+# ==========================================
+# PHYSICAL EXAMINATION NARRATIVE BUILDER
+# ==========================================
+
+
+def create_physical_exam():
+
+
+    return f"""
+
+General examination revealed the patient to be {general_exam_status}.
+Positive findings include {', '.join(general_positive) if general_positive else 'none'}.
+Pertinent negatives include {', '.join(general_negative) if general_negative else 'none'}.
+
+
+HEENT examination was {heent_exam_status}.
+Findings include {', '.join(heent_positive) if heent_positive else 'no significant abnormalities'}.
+Pertinent negatives include {', '.join(heent_negative) if heent_negative else 'none'}.
+
+
+Respiratory examination was {resp_exam_status}.
+Positive findings include {', '.join(resp_positive) if resp_positive else 'no abnormal findings'}.
+Pertinent negatives include {', '.join(resp_negative) if resp_negative else 'none'}.
+
+
+Cardiovascular examination was {cardio_exam_status}.
+Positive findings include {', '.join(cardio_positive) if cardio_positive else 'no significant abnormalities'}.
+Pertinent negatives include {', '.join(cardio_negative) if cardio_negative else 'none'}.
+
+
+Abdominal examination was {abdomen_status}.
+Positive findings include {', '.join(abdomen_positive) if abdomen_positive else 'no significant abnormalities'}.
+Pertinent negatives include {', '.join(abdomen_negative) if abdomen_negative else 'none'}.
+
+
+Genitourinary examination was {gu_exam_status}.
+Positive findings include {', '.join(gu_exam_positive) if gu_exam_positive else 'no significant abnormalities'}.
+Pertinent negatives include {', '.join(gu_exam_negative) if gu_exam_negative else 'none'}.
+
+
+Musculoskeletal examination was {msk_status}.
+Positive findings include {', '.join(msk_positive) if msk_positive else 'no significant abnormalities'}.
+Pertinent negatives include {', '.join(msk_negative) if msk_negative else 'none'}.
+
+
+Neurologic examination was {neuro_status}.
+Positive findings include {', '.join(neuro_positive) if neuro_positive else 'no significant abnormalities'}.
+Pertinent negatives include {', '.join(neuro_negative) if neuro_negative else 'none'}.
+
+"""
+
+
+
+
+
+# ==========================================
 # ASSESSMENT SECTION
-# =====================================
+# ==========================================
 
 
 st.header("Assessment")
 
 
 
-primary_diagnosis = st.text_input(
+if doh_diagnoses:
+
+
+    diagnosis_options = [
+
+        f"{x['icd10_code']} - {x['description']}"
+
+        for x in doh_diagnoses
+
+    ]
+
+
+else:
+
+
+    diagnosis_options = [
+
+        "I10 - Essential Hypertension",
+
+        "J20.9 - Acute Bronchitis",
+
+        "J18.9 - Pneumonia",
+
+        "E11.9 - Type 2 Diabetes Mellitus",
+
+        "J45.909 - Asthma"
+
+    ]
+
+
+
+selected_diagnosis = st.selectbox(
+
     "Primary Diagnosis",
-    "Acute Bronchitis, unspecified (J20.9)"
+
+    diagnosis_options
+
 )
 
 
-clinical_rationale = st.text_area(
+
+primary_dx = selected_diagnosis
+
+
+
+rationale = st.text_area(
+
     "Clinical Rationale",
-    "4-day productive cough following viral upper respiratory symptoms, low-grade fever, normal oxygen saturation, and absence of respiratory distress or consolidation findings"
+
+    "Diagnosis based on patient's history, review of systems, and physical examination findings."
+
 )
+
 
 
 differential = st.text_area(
+
     "Differential Diagnoses",
-    "Community-Acquired Pneumonia (J18.9), Acute Upper Respiratory Infection (J06.9), Pulmonary Tuberculosis"
+
+    "Other possible diagnoses considered based on clinical presentation."
+
 )
+
 
 
 comorbidity = st.text_input(
-    "Comorbid Condition",
-    "Essential Hypertension (I10), controlled on Amlodipine"
+
+    "Comorbid Conditions",
+
+    "None"
+
+)
+# ==========================================
+# MEDICATION DATABASE
+# ==========================================
+
+
+st.header("Medication Management")
+
+
+
+medication_database = {
+
+
+"NCD - Hypertension":
+
+[
+
+"Amlodipine 5 mg tablet",
+
+"Amlodipine 10 mg tablet",
+
+"Losartan 50 mg tablet",
+
+"Losartan + Hydrochlorothiazide tablet",
+
+"Enalapril 5 mg tablet",
+
+"Enalapril 10 mg tablet",
+
+"Captopril 25 mg tablet",
+
+"Hydrochlorothiazide 25 mg tablet",
+
+"Metoprolol 50 mg tablet",
+
+"Telmisartan 40 mg tablet"
+
+],
+
+
+
+"NCD - Diabetes Mellitus":
+
+[
+
+"Metformin 500 mg tablet",
+
+"Metformin 850 mg tablet",
+
+"Gliclazide 30 mg tablet",
+
+"Gliclazide 60 mg tablet",
+
+"Insulin Regular",
+
+"NPH Insulin"
+
+],
+
+
+
+"NCD - Dyslipidemia":
+
+[
+
+"Atorvastatin 20 mg tablet",
+
+"Atorvastatin 40 mg tablet",
+
+"Simvastatin 20 mg tablet",
+
+"Rosuvastatin 10 mg tablet"
+
+],
+
+
+
+"NCD - Cardiovascular Disease":
+
+[
+
+"Aspirin 80 mg tablet",
+
+"Clopidogrel 75 mg tablet",
+
+"Isosorbide Dinitrate tablet",
+
+"Digoxin tablet",
+
+"Furosemide tablet"
+
+],
+
+
+
+"NCD - Asthma / COPD":
+
+[
+
+"Salbutamol inhaler",
+
+"Salbutamol nebulization solution",
+
+"Ipratropium nebulization",
+
+"Budesonide inhaler",
+
+"Budesonide + Formoterol inhaler",
+
+"Montelukast tablet",
+
+"Prednisone tablet"
+
+],
+
+
+
+"Non-NCD - Fever / Pain":
+
+[
+
+"Paracetamol 500 mg tablet",
+
+"Ibuprofen 400 mg tablet",
+
+"Mefenamic Acid 500 mg capsule"
+
+],
+
+
+
+"Non-NCD - Respiratory Infection":
+
+[
+
+"Amoxicillin 500 mg capsule",
+
+"Amoxicillin + Clavulanic Acid tablet",
+
+"Azithromycin 500 mg tablet",
+
+"Cefuroxime tablet",
+
+"Cefixime capsule",
+
+"Doxycycline capsule",
+
+"Co-trimoxazole tablet"
+
+],
+
+
+
+"Non-NCD - Allergic Conditions":
+
+[
+
+"Cetirizine 10 mg tablet",
+
+"Loratadine 10 mg tablet",
+
+"Chlorphenamine tablet"
+
+],
+
+
+
+"Non-NCD - Gastrointestinal":
+
+[
+
+"Omeprazole 20 mg capsule",
+
+"Antacid suspension",
+
+"Oral Rehydration Salt",
+
+"Loperamide capsule",
+
+"Metoclopramide tablet"
+
+],
+
+
+
+"Non-NCD - Urinary Tract Infection":
+
+[
+
+"Nitrofurantoin capsule",
+
+"Ciprofloxacin tablet",
+
+"Co-trimoxazole tablet"
+
+],
+
+
+
+"Non-NCD - Skin Conditions":
+
+[
+
+"Clotrimazole cream",
+
+"Mupirocin ointment",
+
+"Hydrocortisone cream",
+
+"Permethrin cream"
+
+],
+
+
+
+"Supplements":
+
+[
+
+"Iron + Folic Acid tablet",
+
+"Folic Acid tablet",
+
+"Vitamin C tablet",
+
+"Calcium + Vitamin D"
+
+]
+
+}
+
+
+
+med_category = st.selectbox(
+
+    "Medication Category",
+
+    list(medication_database.keys())
+
 )
 
 
 
-# =====================================
+selected_meds = st.multiselect(
+
+    "Select Medication",
+
+    medication_database[med_category]
+
+)
+
+
+
+route = st.selectbox(
+
+    "Route",
+
+    [
+
+        "Oral (PO)",
+
+        "Inhalation",
+
+        "Nebulization",
+
+        "Topical",
+
+        "Injection"
+
+    ]
+
+)
+
+
+
+frequency = st.selectbox(
+
+    "Frequency",
+
+    [
+
+        "Once daily (OD)",
+
+        "Twice daily (BID)",
+
+        "Three times daily (TID)",
+
+        "Every 6 hours (q6h)",
+
+        "Every 8 hours (q8h)",
+
+        "As needed (PRN)"
+
+    ]
+
+)
+
+
+
+duration = st.text_input(
+
+    "Duration",
+
+    "5 days"
+
+)
+
+
+
+
+
+def medication_narrative():
+
+
+    if not selected_meds:
+
+        return "No medications prescribed."
+
+
+    text = ""
+
+
+    for med in selected_meds:
+
+
+        text += (
+
+            f"The patient was prescribed {med}, "
+
+            f"to be administered via {route}, "
+
+            f"{frequency}, for {duration}. "
+
+        )
+
+
+    return text
+
+
+
+
+
+# ==========================================
 # PLAN SECTION
-# =====================================
+# ==========================================
 
 
 st.header("Plan")
@@ -572,140 +1897,194 @@ st.header("Plan")
 
 
 diagnostics = st.text_area(
+
     "Diagnostics / Workup",
-    "Chest X-ray deferred at present; CBC and sputum examination not indicated unless symptoms worsen or persist"
+
+    "Laboratory tests and imaging as clinically indicated."
+
 )
 
-
-medications = st.text_area(
-    "Therapeutics / Pharmacotherapy",
-    "Paracetamol 500 mg tablet as needed for fever; Salbutamol syrup as needed for cough; continue Amlodipine 5 mg once daily"
-)
 
 
 education = st.text_area(
+
     "Patient Education",
-    "Increase oral fluid intake, maintain adequate rest, avoid smoke and respiratory irritants, practice hand hygiene, and use a mask when around household members"
+
+    "Advised on medication compliance, lifestyle modification, hydration, nutrition, and warning signs."
+
 )
 
 
+
 followup = st.text_input(
-    "Follow-up Schedule",
-    "3-5 days or earlier if symptoms worsen"
+
+    "Follow-up",
+
+    "3-5 days or as clinically indicated"
+
 )
 
 
 
 physician = st.text_input(
+
     "Attending Physician",
+
     "________________"
+
 )
 
 
 intern = st.text_input(
+
     "Intern",
+
     "________________"
+
 )
 
 
 clerk = st.text_input(
+
     "Clerk",
+
     "________________"
+
 )
 
 
 
 
-# =====================================
-# GENERATE REPORT
-# =====================================
+
+# ==========================================
+# GENERATE SOAP REPORT
+# ==========================================
 
 
 if st.button(
+
     "Generate Narrative SOAP Report",
+
     type="primary"
+
 ):
 
 
-    soap_data = {
+    physical_exam = create_physical_exam()
+
+
+
+    medication_plan = medication_narrative()
+
+
+
+    data = {
 
 
         "name": name,
+
         "age": age,
+
         "sex": sex,
+
         "date": date,
 
 
         "chief": chief,
-        "duration_of_illness": duration_of_illness,
-        "onset_detail": onset_detail,
+
+        "duration": duration,
+
+        "onset": onset,
+
         "character": character,
+
         "aggravating": aggravating,
+
         "alleviating": alleviating,
+
         "associated": associated,
 
 
         "pmh": pmh,
+
         "family": family,
+
         "social": social,
 
 
         "ros_general": ros_general,
+
         "ros_heent": ros_heent,
+
         "ros_respiratory": ros_respiratory,
+
+        "ros_thorax": ros_thorax,
+
         "ros_cardio": ros_cardio,
 
+        "ros_gastro": ros_gastro,
 
-        "bp": bp,
-        "hr": hr,
-        "rr": rr,
-        "temperature": temperature,
-        "spo2": spo2,
-        "bmi": bmi,
+        "ros_gu": ros_gu,
 
+        "ros_musculoskeletal": ros_musculoskeletal,
 
-        "general": general,
-        "heent": heent,
+        "ros_neuro": ros_neuro,
+
+        "ros_skin": ros_skin,
 
 
-        "inspection": inspection,
-        "palpation": palpation,
-        "percussion": percussion,
-        "auscultation": auscultation,
+        "bp": bp if 'bp' in globals() else "",
+
+        "hr": hr if 'hr' in globals() else "",
+
+        "rr": rr if 'rr' in globals() else "",
+
+        "temperature": temperature if 'temperature' in globals() else "",
+
+        "spo2": spo2 if 'spo2' in globals() else "",
+
+        "bmi": bmi if 'bmi' in globals() else "",
 
 
-        "cardiovascular": cardiovascular,
+        "physical_exam": physical_exam,
 
 
-        "primary_diagnosis": primary_diagnosis,
-        "clinical_rationale": clinical_rationale,
+        "primary_dx": primary_dx,
+
+        "rationale": rationale,
+
         "differential": differential,
+
         "comorbidity": comorbidity,
 
 
         "diagnostics": diagnostics,
-        "medications": medications,
+
+        "medications": medication_plan,
+
         "education": education,
+
         "followup": followup,
 
 
         "physician": physician,
+
         "intern": intern,
+
         "clerk": clerk
 
     }
 
 
 
-    final_report = generate_soap(
-        soap_data
-    )
+    final_report = generate_soap(data)
 
 
 
     st.success(
-        "SOAP Report Generated Successfully"
+        "SOAP Report Generated"
     )
+
 
 
     st.markdown(
@@ -715,8 +2094,13 @@ if st.button(
 
 
     st.download_button(
-        label="Download SOAP Report (.txt)",
+
+        label="Download SOAP Report",
+
         data=final_report,
-        file_name="Clinical_SOAP_Report.txt",
+
+        file_name="SOAP_Report.txt",
+
         mime="text/plain"
+
     )
