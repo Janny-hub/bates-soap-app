@@ -1,13 +1,24 @@
 import streamlit as st
 from supabase import create_client, Client
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+import io
 
 
 # ==========================================
 # PAGE CONFIGURATION
 # ==========================================
 
+st.markdown("""
+<style>
+.stApp {background-color:#f4fbf7;}
+h1,h2,h3 {color:#087f5b;}
+.stButton>button {background-color:#0ca678;color:white;border-radius:10px;}
+</style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(
-    page_title="Bates SOAP Clinical EMR",
+    page_title="MediFlow AI Clinical EMR",
     layout="wide"
 )
 
@@ -292,19 +303,67 @@ Clerk:
 
 
 
+
+# ==========================================
+# MEDIFLOW AI SUPPORT MODULE
+# ==========================================
+
+def ai_diagnosis_suggestion(chief, symptoms):
+    text = (chief + " " + symptoms).lower()
+    result = []
+    if "cough" in text or "sputum" in text:
+        result.append(("Respiratory infection consideration",
+        "Respiratory symptoms may indicate infection. Confirm through examination and appropriate diagnostic testing."))
+    if "fever" in text:
+        result.append(("Febrile illness evaluation",
+        "Fever requires assessment of possible infectious or inflammatory causes."))
+    if "chest pain" in text:
+        result.append(("Cardiovascular assessment",
+        "Chest pain requires evaluation for cardiac and other possible causes."))
+    if not result:
+        result.append(("Further clinical assessment required",
+        "AI suggestion generated from available patient information."))
+    return result
+
+
+def ai_management_suggestion(primary_dx):
+    return f"""AI Management Support:
+Diagnosis reviewed: {primary_dx}
+
+Recommended clinical workflow:
+• Verify diagnosis using history, physical examination, and indicated diagnostics.
+• Review medication appropriateness, allergies, contraindications, and interactions.
+• Provide patient education and follow-up monitoring.
+• Final treatment decisions require healthcare professional judgment.
+"""
+
+
+def create_pdf(report):
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(buffer)
+    styles = getSampleStyleSheet()
+    elements = []
+    for line in report.split("\n"):
+        elements.append(Paragraph(line.replace("&", "and"), styles["Normal"]))
+        elements.append(Spacer(1, 8))
+    document.build(elements)
+    buffer.seek(0)
+    return buffer
+
+
 # ==========================================
 # APP TITLE
 # ==========================================
 
 
 st.title(
-    "🩺 Bates SOAP & PhilHealth Konsulta Clinical Generator"
+    "🩺 MediFlow AI Clinical EMR"
 )
 
 
 
 st.write(
-    "Narrative SOAP documentation system for Primary Care."
+    "AI-assisted SOAP documentation, diagnosis rationale, and clinical management support."
 )
 
 
@@ -1421,43 +1480,43 @@ def create_physical_exam():
     return f"""
 
 General examination revealed the patient to be {general_exam_status}.
-Positive findings include {', '.join(general_positive) if general_positive else 'none'}.
-Pertinent negatives include {', '.join(general_negative) if general_negative else 'none'}.
+Positive findings include {', '.join(general_positive) if general_positive else 'No abnormal finding documented'}.
+Pertinent negatives include {', '.join(general_negative) if general_negative else 'No abnormal finding documented'}.
 
 
 HEENT examination was {heent_exam_status}.
 Findings include {', '.join(heent_positive) if heent_positive else 'no significant abnormalities'}.
-Pertinent negatives include {', '.join(heent_negative) if heent_negative else 'none'}.
+Pertinent negatives include {', '.join(heent_negative) if heent_negative else 'No abnormal finding documented'}.
 
 
 Respiratory examination was {resp_exam_status}.
 Positive findings include {', '.join(resp_positive) if resp_positive else 'no abnormal findings'}.
-Pertinent negatives include {', '.join(resp_negative) if resp_negative else 'none'}.
+Pertinent negatives include {', '.join(resp_negative) if resp_negative else 'No abnormal finding documented'}.
 
 
 Cardiovascular examination was {cardio_exam_status}.
 Positive findings include {', '.join(cardio_positive) if cardio_positive else 'no significant abnormalities'}.
-Pertinent negatives include {', '.join(cardio_negative) if cardio_negative else 'none'}.
+Pertinent negatives include {', '.join(cardio_negative) if cardio_negative else 'No abnormal finding documented'}.
 
 
 Abdominal examination was {abdomen_status}.
 Positive findings include {', '.join(abdomen_positive) if abdomen_positive else 'no significant abnormalities'}.
-Pertinent negatives include {', '.join(abdomen_negative) if abdomen_negative else 'none'}.
+Pertinent negatives include {', '.join(abdomen_negative) if abdomen_negative else 'No abnormal finding documented'}.
 
 
 Genitourinary examination was {gu_exam_status}.
 Positive findings include {', '.join(gu_exam_positive) if gu_exam_positive else 'no significant abnormalities'}.
-Pertinent negatives include {', '.join(gu_exam_negative) if gu_exam_negative else 'none'}.
+Pertinent negatives include {', '.join(gu_exam_negative) if gu_exam_negative else 'No abnormal finding documented'}.
 
 
 Musculoskeletal examination was {msk_status}.
 Positive findings include {', '.join(msk_positive) if msk_positive else 'no significant abnormalities'}.
-Pertinent negatives include {', '.join(msk_negative) if msk_negative else 'none'}.
+Pertinent negatives include {', '.join(msk_negative) if msk_negative else 'No abnormal finding documented'}.
 
 
 Neurologic examination was {neuro_status}.
 Positive findings include {', '.join(neuro_positive) if neuro_positive else 'no significant abnormalities'}.
-Pertinent negatives include {', '.join(neuro_negative) if neuro_negative else 'none'}.
+Pertinent negatives include {', '.join(neuro_negative) if neuro_negative else 'No abnormal finding documented'}.
 
 """
 
@@ -1892,6 +1951,10 @@ def medication_narrative():
 # ==========================================
 
 
+st.header("AI Management and Medication Support")
+ai_management = ai_management_suggestion(primary_dx)
+st.info(ai_management)
+
 st.header("Plan")
 
 
@@ -2060,7 +2123,7 @@ if st.button(
 
         "diagnostics": diagnostics,
 
-        "medications": medication_plan,
+        "medications": medication_plan + "\n\n" + ai_management,
 
         "education": education,
 
@@ -2093,14 +2156,11 @@ if st.button(
 
 
 
+    pdf_report = create_pdf(final_report)
+
     st.download_button(
-
-        label="Download SOAP Report",
-
-        data=final_report,
-
-        file_name="SOAP_Report.txt",
-
-        mime="text/plain"
-
+        label="Download SOAP Report PDF",
+        data=pdf_report,
+        file_name="MediFlow_SOAP_Report.pdf",
+        mime="application/pdf"
     )
